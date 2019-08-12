@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mybatis-spring="http://mybatis.org/schema/mybatis-spring"
+	xsi:schemaLocation="http://mybatis.org/schema/mybatis-spring http://mybatis.org/schema/mybatis-spring-1.2.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd">
+	
+	<context:property-placeholder location="classpath:jdbc.properties"/>
+	<bean id="dataSource" class="org.apache.commons.dbcp2.BasicDataSource">
+        <property name="driverClassName" value="${jdbc.driverClassName}"/>
+        <property name="url" value="${jdbc.url}"/>
+        <property name="username" value="${jdbc.username}"/>
+        <property name="password" value="${jdbc.password}"/>
+    </bean>
+    
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!-- 指定mybatis的数据源 -->
+        <property name="dataSource" ref="dataSource"></property>
+
+        <!-- 指定mybatis的全局配置文件 -->
+        <property name="configLocation" value="classpath:mybatis/mybatis-config.xml"></property>
+
+        <!--扫描mappers目录及子目录下的所有xml文件-->
+        <property name="mapperLocations" value="classpath:mybatis/mappers/*.xml"></property>    
+
+    </bean>
+    
+    <!-- <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+    	<property name="basePackage" value="com.cheng.mappers"></property>
+    </bean> -->
+    <mybatis-spring:scan base-package="com.cheng.mappers"/>
+
+
+
+	<bean id="shiroFilter"
+		class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+		<property name="securityManager" ref="securityManager" />
+		<property name="loginUrl" value="/"></property>
+		<property name="unauthorizedUrl" value="api/unauthorized" />
+		<property name="filterChainDefinitions">
+			<value>
+				<!--匿名访问，/api/login是登陆接口，当然可以随便访问 -->
+				/api/login = anon
+				/api/register = anon
+				/api/test? = authc
+				<!--本工程中上传文件的接口，只允许有common角色的用户访问 -->
+				/api/file = roles[common]
+				<!--用户退出登录的接口，后端不需要实现该接口，logout拦截到/api/logout的url后，就自动清除登录状态回到首页了 -->
+				<!--因为在web.xml中设置的url-parttern是/api/*，随意只有api开头的url才会被拦截 -->
+				/api/logout = logout
+				<!--使用自定义拦截器的接口 -->
+				<!--/api/selfFilter = myFilter -->
+				<!--其他所有接口都需要认证，也就是需要之前输入过账号密码登录过 -->
+				/** = authc
+			</value>
+		</property>
+	</bean>
+	
+	<!--非web环境使用DefaultSecurityManager-->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <!--多realm的授权策略设置，配置为必须满足全部realm才算成功，不在realms前配置的话authenticator中的realms集合为空-->
+        <!--securityManager注入realms的时候，会把realm也放一份到authenticator中，所以必须写在realms上面!!!-->
+        <property name="authenticator">
+            <bean class="org.apache.shiro.authc.pam.ModularRealmAuthenticator">
+                <property name="authenticationStrategy">
+                    <bean class="org.apache.shiro.authc.pam.AllSuccessfulStrategy"/>
+                </property>
+            </bean>
+        </property>
+        <!--如果只有一个realm的话，可以直接注入realm属性，不需要注入realms属性-->
+        <!--为了以后的扩展，即使只有一个realm还是注入了realms属性(虽然以后估计也都是单realm)-->
+        <property name="realms">
+            <list>
+                <bean class="com.cheng.realm.MyRealm">
+                    <property name="credentialsMatcher">
+                        <bean class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+                            <!--指定加密算法-->
+                            <property name="hashAlgorithmName" value="MD5"/>
+                            <!--指定对密码连续进行5轮md5加密-->
+                            <property name="hashIterations" value="5"/>
+                        </bean>
+                    </property>
+                </bean>
+            </list>
+        </property>
+    </bean>
+	
+
+	<context:component-scan base-package="com.cheng">
+		<context:exclude-filter type="annotation"
+			expression="org.springframework.stereotype.Controller" />
+	</context:component-scan>
+</beans>
